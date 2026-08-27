@@ -31,7 +31,7 @@ Tu código ya está en: `https://github.com/analiarojas2929/cerebro-digital`
 2. Ir a **"Environment"**
 3. Agregar variables:
    ```
-   KOSTRA_KEY = sk-OACzL1DBvIicxvS779iUhw
+   KOSTRA_KEY = tu_api_key_de_kostra
    APP_NAME = Cerebro Digital
    ```
 
