@@ -86,16 +86,16 @@ const ChatInterface: React.FC = () => {
   return (
     <div className="flex h-full flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 max-md:min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-xl max-md:p-4">
-        <div className="flex items-center gap-4">
-          <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-3 shadow-lg shadow-cyan-500/20 max-md:shrink-0 max-md:p-2.5">
+      <div className="flex items-center justify-between border-b border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-xl max-md:p-3">
+        <div className="flex min-w-0 items-center gap-4 max-md:gap-2">
+          <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-3 shadow-lg shadow-cyan-500/20 max-md:shrink-0 max-md:p-2">
             <Brain className="h-6 w-6 text-white max-md:h-5 max-md:w-5" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent max-md:text-xl">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent max-md:text-lg">
               Cerebro Digital
             </h1>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="truncate text-sm font-medium text-slate-400 max-md:text-xs">
               {sessionId ? `Sesión: ${sessionId.slice(0, 8)}...` : 'Nueva conversación'}
             </p>
           </div>
@@ -113,19 +113,19 @@ const ChatInterface: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-6 max-md:min-h-0 max-md:p-4">
+      <div className="flex-1 space-y-4 overflow-y-auto p-6 max-md:min-h-0 max-md:p-3">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="mb-6 relative">
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="relative mb-6 max-md:mb-3">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full blur-2xl opacity-20 animate-pulse"></div>
-              <div className="relative bg-gradient-to-br from-cyan-500 to-blue-600 p-6 rounded-2xl">
-                <Brain className="w-16 h-16 text-white" />
+              <div className="relative rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 p-6 max-md:p-4">
+                <Brain className="h-16 w-16 text-white max-md:h-12 max-md:w-12" />
               </div>
             </div>
-            <h2 className="mb-3 text-3xl font-bold text-white max-md:text-2xl">
+            <h2 className="mb-3 w-full break-words text-3xl font-bold text-white max-md:text-xl">
               ¡Hola! Soy tu Cerebro Digital
             </h2>
-            <p className="max-w-md text-lg leading-relaxed text-slate-300 max-md:text-base">
+            <p className="w-full max-w-md break-words text-lg leading-relaxed text-slate-300 max-md:text-sm">
               Puedo recordar nuestras conversaciones, clasificar información y ayudarte
               a encontrar lo que necesitas. ¿En qué puedo ayudarte hoy?
             </p>
@@ -154,7 +154,7 @@ const ChatInterface: React.FC = () => {
       </div>
 
       {/* Input */}
-      <div className="border-t border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-2xl max-md:p-4">
+      <div className="border-t border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-2xl max-md:p-3">
         <div className="flex gap-3 max-md:items-end max-md:gap-2">
           <textarea
             value={input}

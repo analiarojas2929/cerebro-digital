@@ -78,55 +78,80 @@ def database_status() -> dict:
 def load_user(username: str) -> Optional[dict]:
     if _engine is None:
         return None
-    with Session(_engine) as db:
-        record = db.get(UserRecord, username)
-        return record_to_dict(record) if record else None
+    try:
+        with Session(_engine) as db:
+            record = db.get(UserRecord, username)
+            return record_to_dict(record) if record else None
+    except Exception as error:
+        mark_database_unavailable(error)
+        return None
 
 
 def load_user_by_email(email: str) -> Optional[dict]:
     if _engine is None:
         return None
-    with Session(_engine) as db:
-        record = db.scalar(select(UserRecord).where(UserRecord.email == email))
-        return record_to_dict(record) if record else None
+    try:
+        with Session(_engine) as db:
+            record = db.scalar(select(UserRecord).where(UserRecord.email == email))
+            return record_to_dict(record) if record else None
+    except Exception as error:
+        mark_database_unavailable(error)
+        return None
 
 
 def save_user(user_data: dict) -> None:
     if _engine is None:
         return
-    with Session(_engine) as db:
-        db.add(UserRecord(**user_data))
-        db.add(UserSessionRecord(
-            user_id=user_data["user_id"],
-            data={
-                "dynamic_categories": {},
-                "memory_threads": {},
-                "memory_index": {},
-                "conversations": [],
-            },
-        ))
-        db.commit()
+    try:
+        with Session(_engine) as db:
+            db.add(UserRecord(**user_data))
+            db.add(UserSessionRecord(
+                user_id=user_data["user_id"],
+                data={
+                    "dynamic_categories": {},
+                    "memory_threads": {},
+                    "memory_index": {},
+                    "conversations": [],
+                },
+            ))
+            db.commit()
+    except Exception as error:
+        mark_database_unavailable(error)
 
 
 def load_session(user_id: str) -> Optional[dict]:
     if _engine is None:
         return None
-    with Session(_engine) as db:
-        record = db.get(UserSessionRecord, user_id)
-        return dict(record.data) if record else None
+    try:
+        with Session(_engine) as db:
+            record = db.get(UserSessionRecord, user_id)
+            return dict(record.data) if record else None
+    except Exception as error:
+        mark_database_unavailable(error)
+        return None
 
 
 def save_session(user_id: str, data: dict) -> None:
     if _engine is None:
         return
-    with Session(_engine) as db:
-        record = db.get(UserSessionRecord, user_id)
-        if record is None:
-            record = UserSessionRecord(user_id=user_id, data=data)
-            db.add(record)
-        else:
-            record.data = data
-        db.commit()
+    try:
+        with Session(_engine) as db:
+            record = db.get(UserSessionRecord, user_id)
+            if record is None:
+                record = UserSessionRecord(user_id=user_id, data=data)
+                db.add(record)
+            else:
+                record.data = data
+            db.commit()
+    except Exception as error:
+        mark_database_unavailable(error)
+
+
+def mark_database_unavailable(error: Exception) -> None:
+    global _engine, _database_error
+    _database_error = str(error)
+    _engine = None
+    print(f"⚠️ PostgreSQL no disponible: {_database_error}")
 
 
 def record_to_dict(record: UserRecord) -> dict:

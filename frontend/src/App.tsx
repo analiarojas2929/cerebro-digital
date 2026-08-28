@@ -39,14 +39,14 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex h-screen w-full bg-slate-900 max-md:flex-col">
+      <div className="flex h-screen w-full bg-slate-900 max-md:h-[100dvh] max-md:min-h-[100dvh] max-md:flex-col">
         <Sidebar />
         <div className="flex flex-1 flex-col max-md:min-h-0 max-md:min-w-0">
           {/* Botones de navegación */}
-          <div className="flex gap-3 border-b border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-4 shadow-lg max-md:flex-wrap max-md:gap-2 max-md:px-3 max-md:py-3">
+          <div className="flex gap-3 border-b border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-4 shadow-lg max-md:flex-wrap max-md:gap-2 max-md:px-3 max-md:py-2">
             <button
               onClick={() => setView('chat')}
-              className={`rounded-xl px-6 py-3 font-semibold transition-all max-md:px-4 max-md:py-2.5 max-md:text-sm ${
+              className={`rounded-xl px-6 py-3 font-semibold transition-all max-md:flex-1 max-md:px-3 max-md:py-2.5 max-md:text-sm ${
                 view === 'chat'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/50'
@@ -56,7 +56,7 @@ function App() {
             </button>
             <button
               onClick={() => setView('neural')}
-              className={`rounded-xl px-6 py-3 font-semibold transition-all max-md:px-4 max-md:py-2.5 max-md:text-sm ${
+              className={`rounded-xl px-6 py-3 font-semibold transition-all max-md:flex-1 max-md:px-3 max-md:py-2.5 max-md:text-sm ${
                 view === 'neural'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/30 scale-105'
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/50'
@@ -64,7 +64,7 @@ function App() {
             >
               🧠 Red Neuronal
             </button>
-            <div className="ml-auto flex items-center gap-3 max-md:min-w-0 max-md:gap-2">
+            <div className="ml-auto flex items-center gap-3 max-md:basis-full max-md:justify-between max-md:border-t max-md:border-slate-700/50 max-md:pt-2 max-md:gap-2">
               <span className="text-sm text-slate-400 max-md:max-w-[110px] max-md:truncate max-md:text-xs">{user?.full_name || user?.username}</span>
               <button
                 onClick={handleLogout}

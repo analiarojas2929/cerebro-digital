@@ -4,7 +4,7 @@ Manejo de login, registro y sesiones
 """
 from datetime import datetime, timedelta
 from typing import Optional
-from jose import jwt
+from jose import JWTError, jwt
 import hashlib
 import uuid
 import os
@@ -64,6 +64,14 @@ class Token(BaseModel):
     token_type: str
     user_info: dict
 
+def public_user(user: UserInDB) -> dict:
+    return {
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "disabled": user.disabled,
+    }
+
 # Funciones de utilidad
 def hash_password(password: str) -> str:
     """Hash de contraseña usando SHA256"""
@@ -89,9 +97,7 @@ def decode_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError:
-        return None
-    except jwt.InvalidTokenError:
+    except JWTError:
         return None
 
 def get_user(username: str) -> Optional[UserInDB]:

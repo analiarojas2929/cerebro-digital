@@ -18,12 +18,12 @@ const Sidebar: React.FC = () => {
   const getCategoryIcon = (icon?: string) => icon || '📌';
 
   return (
-    <aside className="flex w-80 flex-col border-r border-slate-700/50 bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl max-md:max-h-[38vh] max-md:w-full max-md:shrink-0 max-md:overflow-hidden max-md:border-b max-md:border-r-0">
+    <aside className="flex w-80 flex-col border-r border-slate-700/50 bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl max-md:max-h-[23vh] max-md:w-full max-md:shrink-0 max-md:overflow-hidden max-md:border-b max-md:border-r-0">
       {/* Header */}
-      <div className="p-6 border-b border-slate-700/50 bg-slate-900/50">
-        <h2 className="text-xl font-bold text-white flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg">
-            <Database className="w-5 h-5 text-white" />
+      <div className="p-6 border-b border-slate-700/50 bg-slate-900/50 max-md:p-3">
+        <h2 className="text-xl font-bold text-white flex items-center gap-3 max-md:text-base max-md:gap-2">
+          <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg max-md:p-1.5">
+            <Database className="w-5 h-5 text-white max-md:h-4 max-md:w-4" />
           </div>
           <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
             Sistema Neural
@@ -32,29 +32,29 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="space-y-4 p-6 max-md:grid max-md:grid-cols-2 max-md:gap-3 max-md:space-y-0 max-md:p-4">
+      <div className="space-y-4 p-6 max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:space-y-0 max-md:p-2">
         {statsLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
           </div>
         ) : (
           <>
-            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-cyan-500/10 max-md:p-3">
+            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-cyan-500/10 max-md:p-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-300">Conversaciones</span>
-                <TrendingUp className="w-5 h-5 text-green-400" />
+                <span className="text-sm font-medium text-slate-300 max-md:text-[11px]">Conversaciones</span>
+                <TrendingUp className="w-5 h-5 text-green-400 max-md:h-4 max-md:w-4" />
               </div>
               <p className="mt-2 text-3xl font-bold text-white bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent max-md:mt-1 max-md:text-2xl">
                 {stats?.total_conversations || 0}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-blue-500/10 max-md:p-3">
+            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-blue-500/10 max-md:p-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-300">Memorias Guardadas</span>
-                <Database className="w-5 h-5 text-blue-400" />
+                <span className="text-sm font-medium text-slate-300 max-md:text-[11px]">Memorias Guardadas</span>
+                <Database className="w-5 h-5 text-blue-400 max-md:h-4 max-md:w-4" />
               </div>
-              <p className="mt-2 text-3xl font-bold text-white bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent max-md:mt-1 max-md:text-2xl">
+              <p className="mt-2 text-3xl font-bold text-white bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent max-md:mt-0 max-md:text-xl">
                 {stats?.total_memories || 0}
               </p>
             </div>
@@ -63,7 +63,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Categories */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6 max-md:min-h-0 max-md:px-4 max-md:pb-4">
+      <div className="flex-1 overflow-y-auto px-6 pb-6 max-md:hidden">
         <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-wider">
           <FolderTree className="w-4 h-4 text-cyan-400" />
           Categorías
@@ -110,7 +110,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <div className="p-6 border-t border-slate-700/50 bg-slate-900/50">
+      <div className="p-6 border-t border-slate-700/50 bg-slate-900/50 max-md:hidden">
         <p className="text-xs text-slate-400 text-center">
           <span className="font-semibold text-cyan-400">Cerebro Digital</span> v1.0.0
           <br />

@@ -58,7 +58,9 @@ export function NeuralNetwork() {
   const [reminderMessage, setReminderMessage] = useState('');
   const [showExpirationForm, setShowExpirationForm] = useState(false);
   const [expirationDate, setExpirationDate] = useState('');
-  const [showStats, setShowStats] = useState(true);
+  const [showStats, setShowStats] = useState(() => (
+    typeof window === 'undefined' || !window.matchMedia('(max-width: 767px)').matches
+  ));
   const [viewport, setViewport] = useState({ width: 800, height: 600 });
   const sizeRef = useRef(viewport);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -154,13 +156,14 @@ export function NeuralNetwork() {
     if (!node) return;
     const updateSize = () => {
       const containerRect = node.getBoundingClientRect();
-      const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 0;
+      const headerHeight = node.firstElementChild?.getBoundingClientRect().height ?? 0;
       const width = Math.round(containerRect.width);
       const height = Math.round(containerRect.height - headerHeight);
       if (width > 0 && height > 0) {
         const next = { width, height };
         sizeRef.current = next;
         setViewport(next);
+        loadNeuralNetwork();
       }
     };
     updateSize();
@@ -170,11 +173,15 @@ export function NeuralNetwork() {
   }, []);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const handleMediaChange = (event: MediaQueryListEvent) => setShowStats(!event.matches);
+    mediaQuery.addEventListener('change', handleMediaChange);
     loadNeuralNetwork();
     const interval = setInterval(loadNeuralNetwork, 5000);
     return () => {
       clearInterval(interval);
       resizeObserverRef.current?.disconnect();
+      mediaQuery.removeEventListener('change', handleMediaChange);
     };
   }, []);
 
@@ -298,7 +305,7 @@ export function NeuralNetwork() {
   const stats = getNodeStats();
 
   return (
-    <div ref={containerCallbackRef} className="relative h-full w-full overflow-hidden rounded-lg bg-gradient-to-br from-slate-950 via-slate-900 to-black max-md:min-h-0">
+    <div ref={containerCallbackRef} className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg bg-gradient-to-br from-slate-950 via-slate-900 to-black">
       {/* Header con gradiente mejorado */}
       <div ref={headerRef} className="border-b border-cyan-500/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4 shadow-xl backdrop-blur-sm max-md:px-4 max-md:py-3">
         <div className="flex items-center justify-between max-md:items-start max-md:gap-3">
@@ -345,11 +352,12 @@ export function NeuralNetwork() {
         </div>
       </div>
       
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        width={viewport.width}
-        height={viewport.height}
+      <div className="min-h-0 flex-1">
+        <ForceGraph2D
+          ref={graphRef}
+          graphData={graphData}
+          width={viewport.width}
+          height={viewport.height}
         nodeLabel={(node: any) => {
           const layerNames = ['Categoría', 'Subcategoría', 'Memoria', 'Comentario'];
           const layerName = layerNames[node.layer] || 'Nodo';
@@ -427,7 +435,8 @@ export function NeuralNetwork() {
           setShowReminderForm(false);
           setShowExpirationForm(false);
         }}
-      />
+        />
+      </div>
       
       {/* MODAL DE INFORMACIÓN MEJORADO */}
       {selectedNode && (

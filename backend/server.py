@@ -15,6 +15,7 @@ from auth import (
     User, UserCreate, UserInDB, UserLogin, Token,
     ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token,
     create_user, get_current_user, get_user_session, initialize_demo_users,
+    public_user,
 )
 from auth_database import DATABASE_URL, database_status, save_session
 from datetime import timedelta
@@ -114,7 +115,7 @@ async def register(user_data: UserCreate):
         {"sub": user.username},
         timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return Token(access_token=token, token_type="bearer", user_info=user.dict())
+    return Token(access_token=token, token_type="bearer", user_info=public_user(user))
 
 @app.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
@@ -125,7 +126,7 @@ async def login(credentials: UserLogin):
         {"sub": user.username},
         timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    return Token(access_token=token, token_type="bearer", user_info=user.dict())
+    return Token(access_token=token, token_type="bearer", user_info=public_user(user))
 
 @app.get("/auth/me", response_model=User)
 async def me(user: UserInDB = Depends(current_user)):
