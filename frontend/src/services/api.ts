@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { MessageInput, MessageResponse, MemoryStats, Category } from '@/types';
+import { useAuthStore } from '@/store/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (
   import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
@@ -13,14 +14,9 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const storedAuth = localStorage.getItem('cerebro-auth-storage');
-  if (storedAuth) {
-    try {
-      const token = JSON.parse(storedAuth)?.state?.token;
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    } catch {
-      localStorage.removeItem('cerebro-auth-storage');
-    }
+  const token = useAuthStore.getState().token;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
@@ -28,7 +24,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && error.config?.headers?.Authorization) {
       localStorage.removeItem('cerebro-auth-storage');
       window.location.reload();
     }
