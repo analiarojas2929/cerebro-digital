@@ -3,7 +3,9 @@ import { useAuthStore } from '@/store/authStore';
 import { Brain, Lock, User as UserIcon, AlertCircle, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || (
+  import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
+);
 
 interface LoginProps {
   onSwitchToRegister: () => void;
