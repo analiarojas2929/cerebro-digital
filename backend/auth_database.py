@@ -56,12 +56,14 @@ class UserSessionRecord(Base):
 
 
 def initialize_database() -> None:
+    global _engine
     if _engine is not None:
         try:
             Base.metadata.create_all(_engine)
         except Exception as error:
             global _database_error
             _database_error = str(error)
+            _engine = None
             print(f"⚠️ No se pudo conectar con PostgreSQL: {_database_error}")
 
 

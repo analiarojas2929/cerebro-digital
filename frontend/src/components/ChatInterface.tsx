@@ -84,15 +84,15 @@ const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="flex h-full flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 max-md:min-h-0">
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-700/50 p-6 flex items-center justify-between shadow-xl">
+      <div className="flex items-center justify-between border-b border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-xl max-md:p-4">
         <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-3 rounded-xl shadow-lg shadow-cyan-500/20">
-            <Brain className="w-6 h-6 text-white" />
+          <div className="rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 p-3 shadow-lg shadow-cyan-500/20 max-md:shrink-0 max-md:p-2.5">
+            <Brain className="h-6 w-6 text-white max-md:h-5 max-md:w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent max-md:text-xl">
               Cerebro Digital
             </h1>
             <p className="text-sm text-slate-400 font-medium">
@@ -113,7 +113,7 @@ const ChatInterface: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto p-6 max-md:min-h-0 max-md:p-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="mb-6 relative">
@@ -122,10 +122,10 @@ const ChatInterface: React.FC = () => {
                 <Brain className="w-16 h-16 text-white" />
               </div>
             </div>
-            <h2 className="text-3xl font-bold text-white mb-3">
+            <h2 className="mb-3 text-3xl font-bold text-white max-md:text-2xl">
               ¡Hola! Soy tu Cerebro Digital
             </h2>
-            <p className="text-slate-300 max-w-md text-lg leading-relaxed">
+            <p className="max-w-md text-lg leading-relaxed text-slate-300 max-md:text-base">
               Puedo recordar nuestras conversaciones, clasificar información y ayudarte
               a encontrar lo que necesitas. ¿En qué puedo ayudarte hoy?
             </p>
@@ -154,21 +154,21 @@ const ChatInterface: React.FC = () => {
       </div>
 
       {/* Input */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 border-t border-slate-700/50 p-6 shadow-2xl">
-        <div className="flex gap-3">
+      <div className="border-t border-slate-700/50 bg-gradient-to-r from-slate-900 to-slate-800 p-6 shadow-2xl max-md:p-4">
+        <div className="flex gap-3 max-md:items-end max-md:gap-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Escribe tu mensaje..."
-            className="flex-1 bg-slate-800 text-white rounded-xl px-5 py-4 resize-none focus:outline-none focus:ring-2 focus:ring-cyan-500/50 border border-slate-700/50 placeholder-slate-500"
+            className="flex-1 resize-none rounded-xl border border-slate-700/50 bg-slate-800 px-5 py-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 max-md:min-w-0 max-md:px-4 max-md:py-3"
             rows={1}
             disabled={isLoading}
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isLoading}
-            className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed text-white p-4 rounded-xl transition-all shadow-lg hover:shadow-cyan-500/50 hover:scale-105 disabled:scale-100"
+            className="rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 p-4 text-white shadow-lg transition-all hover:from-cyan-600 hover:to-blue-700 hover:scale-105 hover:shadow-cyan-500/50 disabled:cursor-not-allowed disabled:from-slate-600 disabled:to-slate-700 disabled:scale-100 max-md:shrink-0 max-md:p-3"
           >
             <Send className="w-5 h-5" />
           </button>

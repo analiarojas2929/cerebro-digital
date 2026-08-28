@@ -18,7 +18,7 @@ const Sidebar: React.FC = () => {
   const getCategoryIcon = (icon?: string) => icon || '📌';
 
   return (
-    <div className="w-80 bg-gradient-to-b from-slate-900 to-slate-800 border-r border-slate-700/50 flex flex-col shadow-2xl">
+    <aside className="flex w-80 flex-col border-r border-slate-700/50 bg-gradient-to-b from-slate-900 to-slate-800 shadow-2xl max-md:max-h-[38vh] max-md:w-full max-md:shrink-0 max-md:overflow-hidden max-md:border-b max-md:border-r-0">
       {/* Header */}
       <div className="p-6 border-b border-slate-700/50 bg-slate-900/50">
         <h2 className="text-xl font-bold text-white flex items-center gap-3">
@@ -32,29 +32,29 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="p-6 space-y-4">
+      <div className="space-y-4 p-6 max-md:grid max-md:grid-cols-2 max-md:gap-3 max-md:space-y-0 max-md:p-4">
         {statsLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
           </div>
         ) : (
           <>
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 border border-slate-700/50 shadow-lg hover:shadow-cyan-500/10 transition-shadow">
+            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-cyan-500/10 max-md:p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-300">Conversaciones</span>
                 <TrendingUp className="w-5 h-5 text-green-400" />
               </div>
-              <p className="text-3xl font-bold text-white mt-2 bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
+              <p className="mt-2 text-3xl font-bold text-white bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent max-md:mt-1 max-md:text-2xl">
                 {stats?.total_conversations || 0}
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-4 border border-slate-700/50 shadow-lg hover:shadow-blue-500/10 transition-shadow">
+            <div className="rounded-xl border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900 p-4 shadow-lg transition-shadow hover:shadow-blue-500/10 max-md:p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-300">Memorias Guardadas</span>
                 <Database className="w-5 h-5 text-blue-400" />
               </div>
-              <p className="text-3xl font-bold text-white mt-2 bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent">
+              <p className="mt-2 text-3xl font-bold text-white bg-gradient-to-r from-blue-400 to-cyan-500 bg-clip-text text-transparent max-md:mt-1 max-md:text-2xl">
                 {stats?.total_memories || 0}
               </p>
             </div>
@@ -63,7 +63,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       {/* Categories */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
+      <div className="flex-1 overflow-y-auto px-6 pb-6 max-md:min-h-0 max-md:px-4 max-md:pb-4">
         <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2 uppercase tracking-wider">
           <FolderTree className="w-4 h-4 text-cyan-400" />
           Categorías
@@ -117,7 +117,7 @@ const Sidebar: React.FC = () => {
           <span className="text-slate-500">Sistema Neural Activo 🧠</span>
         </p>
       </div>
-    </div>
+    </aside>
   );
 };
 

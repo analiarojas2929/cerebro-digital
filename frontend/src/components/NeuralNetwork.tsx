@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { memoryApi } from '@/services/api';
 import { X, ZoomIn, ZoomOut, Maximize2, Info } from 'lucide-react';
@@ -59,6 +59,10 @@ export function NeuralNetwork() {
   const [showExpirationForm, setShowExpirationForm] = useState(false);
   const [expirationDate, setExpirationDate] = useState('');
   const [showStats, setShowStats] = useState(true);
+  const [viewport, setViewport] = useState({ width: 800, height: 600 });
+  const sizeRef = useRef(viewport);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const graphRef = useRef<any>();
 
   const handleSaveComment = async (nodeId: string) => {
@@ -143,10 +147,35 @@ export function NeuralNetwork() {
     }
   };
 
+  // Mide el contenedor real cuando se monta (evita depender de refs que no existen durante la carga)
+  const containerCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    if (!node) return;
+    const updateSize = () => {
+      const containerRect = node.getBoundingClientRect();
+      const headerHeight = headerRef.current?.getBoundingClientRect().height ?? 0;
+      const width = Math.round(containerRect.width);
+      const height = Math.round(containerRect.height - headerHeight);
+      if (width > 0 && height > 0) {
+        const next = { width, height };
+        sizeRef.current = next;
+        setViewport(next);
+      }
+    };
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(node);
+    resizeObserverRef.current = observer;
+  }, []);
+
   useEffect(() => {
     loadNeuralNetwork();
     const interval = setInterval(loadNeuralNetwork, 5000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      resizeObserverRef.current?.disconnect();
+    };
   }, []);
 
   const loadNeuralNetwork = async () => {
@@ -161,9 +190,8 @@ export function NeuralNetwork() {
         nodesByLayer[layer].push(node);
       });
       
-      // Dimensiones
-      const width = window.innerWidth - 100;
-      const height = window.innerHeight - 200;
+      // Dimensiones reales del área del grafo (medidas con ResizeObserver)
+      const { width, height } = sizeRef.current;
       const layers = Object.keys(nodesByLayer).map(Number).sort((a, b) => a - b);
       const maxLayer = Math.max(...layers);
       
@@ -270,24 +298,24 @@ export function NeuralNetwork() {
   const stats = getNodeStats();
 
   return (
-    <div className="h-full w-full bg-gradient-to-br from-slate-950 via-slate-900 to-black rounded-lg overflow-hidden relative">
+    <div ref={containerCallbackRef} className="relative h-full w-full overflow-hidden rounded-lg bg-gradient-to-br from-slate-950 via-slate-900 to-black max-md:min-h-0">
       {/* Header con gradiente mejorado */}
-      <div className="px-6 py-4 border-b border-cyan-500/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 backdrop-blur-sm shadow-xl">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-3">
+      <div ref={headerRef} className="border-b border-cyan-500/20 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4 shadow-xl backdrop-blur-sm max-md:px-4 max-md:py-3">
+        <div className="flex items-center justify-between max-md:items-start max-md:gap-3">
+          <div className="max-md:min-w-0">
+            <h2 className="flex items-center gap-3 text-2xl font-bold text-transparent bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text max-md:gap-2 max-md:text-lg">
               🧠 Red Neuronal de Memoria
             </h2>
-            <p className="text-xs text-slate-400 mt-1.5 font-medium">
+            <p className="mt-1.5 text-xs font-medium text-slate-400 max-md:hidden">
               Visualización cronológica: Categorías → Subcategorías → Memorias → Comentarios
             </p>
           </div>
           
           {/* Controles */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 max-md:shrink-0 max-md:gap-1">
             <button
               onClick={() => setShowStats(!showStats)}
-              className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors border border-slate-700/50"
+              className="rounded-lg border border-slate-700/50 bg-slate-800 p-2 transition-colors hover:bg-slate-700"
               title="Toggle estadísticas"
             >
               <Info className="w-4 h-4 text-cyan-400" />
@@ -320,8 +348,8 @@ export function NeuralNetwork() {
       <ForceGraph2D
         ref={graphRef}
         graphData={graphData}
-        width={window.innerWidth - 100}
-        height={window.innerHeight - 200}
+        width={viewport.width}
+        height={viewport.height}
         nodeLabel={(node: any) => {
           const layerNames = ['Categoría', 'Subcategoría', 'Memoria', 'Comentario'];
           const layerName = layerNames[node.layer] || 'Nodo';
@@ -405,7 +433,7 @@ export function NeuralNetwork() {
       {selectedNode && (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-50 p-4"
              onClick={() => setSelectedNode(null)}>
-          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl"
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 max-w-3xl w-full mx-4 shadow-2xl max-md:mx-0 max-md:max-h-[calc(100vh-2rem)] max-md:overflow-y-auto max-md:p-4"
                style={{ 
                  border: `2px solid ${selectedNode.color}`,
                  boxShadow: `0 0 40px ${selectedNode.color}40`
@@ -413,15 +441,15 @@ export function NeuralNetwork() {
                onClick={(e) => e.stopPropagation()}>
             
             {/* Header Mejorado */}
-            <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-700/50">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-start justify-between mb-6 pb-4 border-b border-slate-700/50 max-md:mb-4">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-3 max-md:gap-2">
                   <div className="w-4 h-4 rounded-full animate-pulse shadow-lg" 
                        style={{ 
                          backgroundColor: selectedNode.color,
                          boxShadow: `0 0 20px ${selectedNode.color}`
                        }}></div>
-                  <h3 className="text-2xl font-bold text-white">{selectedNode.name}</h3>
+                  <h3 className="text-2xl font-bold text-white break-words max-md:text-xl">{selectedNode.name}</h3>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                   {selectedNode.category && (
@@ -454,7 +482,7 @@ export function NeuralNetwork() {
             {/* Fecha y Hora Mejorada */}
             {selectedNode.date && selectedNode.time && (
               <div className="bg-gradient-to-r from-slate-800/80 to-slate-700/80 rounded-xl p-4 mb-4 border border-slate-600/50">
-                <div className="flex items-center gap-8 text-sm">
+                <div className="flex items-center gap-8 text-sm max-md:flex-col max-md:items-start max-md:gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-cyan-500/20 rounded-lg border border-cyan-500/30">
                       <span className="text-2xl">📅</span>
@@ -520,15 +548,15 @@ export function NeuralNetwork() {
                   rows={3}
                   disabled={savingComment}
                 />
-                <div className="flex items-center justify-between mt-3">
-                  <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                <div className="flex items-center justify-between mt-3 max-md:flex-col max-md:items-stretch max-md:gap-3">
+                  <p className="text-xs text-slate-400 flex items-center gap-1.5 max-md:leading-relaxed">
                     <span className="w-1.5 h-1.5 bg-purple-400 rounded-full"></span>
                     Los comentarios aparecerán como nodos morados conectados a esta memoria
                   </p>
                   <button
                     onClick={() => handleSaveComment(selectedNode.id!)}
                     disabled={!comment.trim() || savingComment}
-                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
+                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-cyan-500/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none max-md:w-full"
                   >
                     {savingComment ? '⏳ Guardando...' : '💾 Guardar Comentario'}
                   </button>
@@ -548,7 +576,7 @@ export function NeuralNetwork() {
                   </p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="grid grid-cols-2 gap-3 mb-3 max-md:grid-cols-1">
                   {/* Botón Importante */}
                   <button
                     onClick={() => handleToggleImportance(selectedNode.id!, selectedNode.important || false)}
@@ -605,7 +633,7 @@ export function NeuralNetwork() {
                       placeholder="Mensaje personalizado (opcional)"
                       className="w-full bg-slate-700 text-white rounded-lg px-3 py-2.5 text-sm mb-3 border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50 placeholder-slate-500"
                     />
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 max-md:flex-col">
                       <button
                         onClick={() => handleSetReminder(selectedNode.id!)}
                         className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg text-sm font-bold transition-all shadow-lg"
@@ -614,7 +642,7 @@ export function NeuralNetwork() {
                       </button>
                       <button
                         onClick={() => setShowReminderForm(false)}
-                        className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                        className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors max-md:w-full"
                       >
                         ✖️ Cancelar
                       </button>
@@ -637,7 +665,7 @@ export function NeuralNetwork() {
                     <p className="text-xs text-slate-400 mb-3 bg-slate-900/50 rounded-lg p-2.5 border border-slate-700/30">
                       ℹ️ Las memorias caducadas se archivarán automáticamente y no aparecerán en búsquedas
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 max-md:flex-col">
                       <button
                         onClick={() => handleSetExpiration(selectedNode.id!)}
                         className="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg text-sm font-bold transition-all shadow-lg"
@@ -646,7 +674,7 @@ export function NeuralNetwork() {
                       </button>
                       <button
                         onClick={() => setShowExpirationForm(false)}
-                        className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors"
+                        className="px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold transition-colors max-md:w-full"
                       >
                         ✖️ Cancelar
                       </button>
@@ -661,7 +689,7 @@ export function NeuralNetwork() {
       
       {/* Panel de Estadísticas */}
       {showStats && (
-        <div className="absolute top-24 right-4 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-md p-5 rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 min-w-[240px]">
+        <div className="absolute top-24 right-4 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-md p-5 rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 min-w-[240px] max-md:left-3 max-md:right-3 max-md:top-16 max-md:min-w-0 max-md:max-h-[70%] max-md:overflow-y-auto max-md:p-3">
           <h3 className="text-sm font-bold text-cyan-300 mb-4 flex items-center gap-2">
             <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
             Estadísticas de Red
@@ -713,8 +741,8 @@ export function NeuralNetwork() {
         </div>
       )}
 
-      {/* LEYENDA Mejorada */}
-      <div className="absolute bottom-4 left-4 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-md p-5 rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10">
+      {/* LEYENDA Mejorada (oculta en móvil para no solaparse con el panel de estadísticas) */}
+      <div className="absolute bottom-4 left-4 bg-gradient-to-br from-slate-900/95 to-slate-800/95 backdrop-blur-md p-5 rounded-xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 max-md:hidden">
         <h3 className="text-sm font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent mb-4 flex items-center gap-2">
           <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"></span>
           Guía Visual
