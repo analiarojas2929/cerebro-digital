@@ -10,9 +10,10 @@ const Sidebar: React.FC = () => {
     refetchInterval: 30000, // Actualizar cada 30 segundos
   });
 
-  const { data: categories, isLoading: categoriesLoading } = useQuery({
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: memoryApi.getCategories,
+    select: (data) => Array.isArray(data) ? data : [],
   });
 
   const getCategoryIcon = (icon?: string) => icon || '📌';

@@ -3,7 +3,7 @@ import type { MessageInput, MessageResponse, MemoryStats, Category } from '@/typ
 import { useAuthStore } from '@/store/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || (
-  import.meta.env.DEV ? `http://${window.location.hostname}:8000` : ''
+  import.meta.env.DEV ? `http://${window.location.hostname}:8000` : 'https://cerebro-digital-backend.onrender.com'
 );
 
 const api = axios.create({

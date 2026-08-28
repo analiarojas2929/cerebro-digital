@@ -188,6 +188,9 @@ export function NeuralNetwork() {
   const loadNeuralNetwork = async () => {
     try {
       const data = await memoryApi.getNeuralGraph();
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
+        throw new Error('Respuesta inválida de la red neuronal');
+      }
       
       // ORGANIZAR NODOS EN CAPAS TIPO RED NEURONAL CLÁSICA
       const nodesByLayer: { [key: number]: any[] } = {};
