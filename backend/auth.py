@@ -9,6 +9,10 @@ import hashlib
 import uuid
 import os
 from pydantic import BaseModel
+from auth_database import (
+    initialize_database, load_session, load_user, load_user_by_email,
+    save_session, save_user,
+)
 
 # Configuración
 SECRET_KEY = os.getenv(
@@ -22,6 +26,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días
 # En producción, esto debería estar en PostgreSQL
 users_db = {}  # username -> user_data
 user_sessions = {}  # user_id -> {dynamic_categories, memory_threads, memory_index, conversations}
+
+initialize_database()
+
+def empty_session() -> dict:
+    return {
+        "dynamic_categories": {},
+        "memory_threads": {},
+        "memory_index": {},
+        "conversations": [],
+    }
 
 # Modelos
 class User(BaseModel):
@@ -85,6 +99,10 @@ def get_user(username: str) -> Optional[UserInDB]:
     if username in users_db:
         user_data = users_db[username]
         return UserInDB(**user_data)
+    user_data = load_user(username)
+    if user_data:
+        users_db[username] = user_data
+        return UserInDB(**user_data)
     return None
 
 def authenticate_user(username: str, password: str) -> Optional[UserInDB]:
@@ -106,6 +124,8 @@ def create_user(user_data: UserCreate) -> UserInDB:
     for existing_user in users_db.values():
         if existing_user["email"] == user_data.email:
             raise ValueError("El email ya está registrado")
+    if load_user_by_email(user_data.email):
+        raise ValueError("El email ya está registrado")
     
     # Crear usuario
     user_id = str(uuid.uuid4())
@@ -122,25 +142,20 @@ def create_user(user_data: UserCreate) -> UserInDB:
     }
     
     users_db[user_data.username] = new_user
+    save_user(new_user)
     
     # Inicializar sesión de usuario
-    user_sessions[user_id] = {
-        "dynamic_categories": {},
-        "memory_threads": {},
-        "memory_index": {},
-        "conversations": []
-    }
+    user_sessions[user_id] = empty_session()
     
     return UserInDB(**new_user)
 
 def get_user_session(user_id: str) -> dict:
     """Obtener sesión del usuario (sus datos aislados)"""
     if user_id not in user_sessions:
+        stored_session = load_session(user_id) or {}
         user_sessions[user_id] = {
-            "dynamic_categories": {},
-            "memory_threads": {},
-            "memory_index": {},
-            "conversations": []
+            **empty_session(),
+            **stored_session,
         }
     return user_sessions[user_id]
 

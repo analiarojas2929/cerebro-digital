@@ -7,15 +7,17 @@ import uvicorn
 import os
 from dotenv import load_dotenv
 from contextlib import contextmanager
+
+# Cargar configuración antes de importar módulos que inicializan la BD.
+load_dotenv()
+
 from auth import (
     User, UserCreate, UserInDB, UserLogin, Token,
     ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token,
     create_user, get_current_user, get_user_session, initialize_demo_users,
 )
+from auth_database import DATABASE_URL, database_status, save_session
 from datetime import timedelta
-
-# Cargar variables de entorno
-load_dotenv()
 
 # Importar sistema de aprendizaje dinámico
 import dynamic_learning
@@ -80,6 +82,7 @@ def user_learning_storage(user_id: str):
         session["dynamic_categories"] = dynamic_learning.dynamic_categories
         session["memory_threads"] = dynamic_learning.memory_threads
         session["memory_index"] = dynamic_learning.memory_index
+        save_session(user_id, session)
         (
             dynamic_learning.dynamic_categories,
             dynamic_learning.memory_threads,
@@ -139,7 +142,12 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    status = database_status()
+    return {
+        "status": "healthy" if status["connected"] else "degraded",
+        "database": status,
+        "auth": "enabled",
+    }
 
 @app.post("/chat/message")
 async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)):
@@ -231,6 +239,7 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
         "bot": resp,
         "category": cat
     })
+    save_session(user.user_id, user_session)
     
     return MessageResponse(
         response=resp,
