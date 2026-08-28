@@ -10,6 +10,30 @@ const api = axios.create({
   },
 });
 
+api.interceptors.request.use((config) => {
+  const storedAuth = localStorage.getItem('cerebro-auth-storage');
+  if (storedAuth) {
+    try {
+      const token = JSON.parse(storedAuth)?.state?.token;
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    } catch {
+      localStorage.removeItem('cerebro-auth-storage');
+    }
+  }
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('cerebro-auth-storage');
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  },
+);
+
 export const chatApi = {
   sendMessage: async (input: MessageInput): Promise<MessageResponse> => {
     const { data } = await api.post<MessageResponse>('/chat/message', input);

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
@@ -6,6 +6,13 @@ import uuid
 import uvicorn
 import os
 from dotenv import load_dotenv
+from contextlib import contextmanager
+from auth import (
+    User, UserCreate, UserInDB, UserLogin, Token,
+    ACCESS_TOKEN_EXPIRE_MINUTES, authenticate_user, create_access_token,
+    create_user, get_current_user, get_user_session, initialize_demo_users,
+)
+from datetime import timedelta
 
 # Cargar variables de entorno
 load_dotenv()
@@ -42,6 +49,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+initialize_demo_users()
+
+async def current_user(authorization: Optional[str] = Header(None)) -> UserInDB:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Header de autorización inválido")
+    user = get_current_user(parts[1])
+    if user is None:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+    return user
+
+@contextmanager
+def user_learning_storage(user_id: str):
+    """Conecta el motor existente a la sesión del usuario durante una operación."""
+    session = get_user_session(user_id)
+    previous = (
+        dynamic_learning.dynamic_categories,
+        dynamic_learning.memory_threads,
+        dynamic_learning.memory_index,
+    )
+    dynamic_learning.dynamic_categories = session["dynamic_categories"]
+    dynamic_learning.memory_threads = session["memory_threads"]
+    dynamic_learning.memory_index = session["memory_index"]
+    try:
+        yield session
+    finally:
+        session["dynamic_categories"] = dynamic_learning.dynamic_categories
+        session["memory_threads"] = dynamic_learning.memory_threads
+        session["memory_index"] = dynamic_learning.memory_index
+        (
+            dynamic_learning.dynamic_categories,
+            dynamic_learning.memory_threads,
+            dynamic_learning.memory_index,
+        ) = previous
+
 # Modelos
 class MessageInput(BaseModel):
     message: str
@@ -57,6 +101,33 @@ class MessageResponse(BaseModel):
 # Storage
 conversations = []
 
+@app.post("/auth/register", response_model=Token)
+async def register(user_data: UserCreate):
+    try:
+        user = create_user(user_data)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    token = create_access_token(
+        {"sub": user.username},
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return Token(access_token=token, token_type="bearer", user_info=user.dict())
+
+@app.post("/auth/login", response_model=Token)
+async def login(credentials: UserLogin):
+    user = authenticate_user(credentials.username, credentials.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
+    token = create_access_token(
+        {"sub": user.username},
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    return Token(access_token=token, token_type="bearer", user_info=user.dict())
+
+@app.get("/auth/me", response_model=User)
+async def me(user: UserInDB = Depends(current_user)):
+    return User(**user.dict(exclude={"hashed_password", "user_id", "created_at"}))
+
 # Rutas
 @app.get("/")
 async def root():
@@ -71,12 +142,13 @@ async def health():
     return {"status": "healthy"}
 
 @app.post("/chat/message")
-async def send_message(msg: MessageInput):
+async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)):
     sid = msg.session_id or str(uuid.uuid4())
     text = msg.message.lower()
     
     # APRENDIZAJE DINÁMICO - Extraer y almacenar categorías automáticamente
-    entities_found = update_categories(msg.message)
+    with user_learning_storage(user.user_id) as user_session:
+        entities_found = update_categories(msg.message)
     
     # Clasificación simple
     if 'trabajo' in text or 'proyecto' in text:
@@ -97,12 +169,12 @@ async def send_message(msg: MessageInput):
                     "role": "user" if i % 2 == 0 else "assistant",
                     "content": c["user"] if i % 2 == 0 else c["bot"]
                 }
-                for i, c in enumerate([conv for conv in conversations if conv.get("session") == sid][-10:])
+                for i, c in enumerate([conv for conv in user_session["conversations"] if conv.get("session") == sid][-10:])
             ]
             
             # Convertir categorías dinámicas a memorias
             memories = []
-            for category_name, category_data in dynamic_learning.dynamic_categories.items():
+            for category_name, category_data in user_session["dynamic_categories"].items():
                 for subcat_name, subcat_data in category_data.get('subcategories', {}).items():
                     for memory in subcat_data.get('memories', []):
                         memories.append({
@@ -153,7 +225,7 @@ async def send_message(msg: MessageInput):
                 resp = f"Mensaje guardado como '{cat}'"
     
     # Guardar en historial
-    conversations.append({
+    user_session["conversations"].append({
         "session": sid,
         "user": msg.message,
         "bot": resp,
@@ -168,24 +240,26 @@ async def send_message(msg: MessageInput):
     )
 
 @app.get("/memory/stats")
-async def stats():
+async def stats(user: UserInDB = Depends(current_user)):
+    user_session = get_user_session(user.user_id)
     cats = {}
-    for c in conversations:
+    for c in user_session["conversations"]:
         cat = c.get("category", "general")
         cats[cat] = cats.get(cat, 0) + 1
     
     return {
-        "total_conversations": len(conversations),
-        "total_memories": len(conversations),
+        "total_conversations": len(user_session["conversations"]),
+        "total_memories": len(user_session["conversations"]),
         "categories": [{"name": k, "count": v} for k, v in cats.items()]
     }
 
 @app.get("/memory/categories")
-async def categories():
+async def categories(user: UserInDB = Depends(current_user)):
     """Retorna las categorías dinámicas aprendidas del sistema"""
     categories_list = []
     
-    for cat_name, cat_data in dynamic_learning.dynamic_categories.items():
+    user_session = get_user_session(user.user_id)
+    for cat_name, cat_data in user_session["dynamic_categories"].items():
         categories_list.append({
             "id": len(categories_list) + 1,
             "name": cat_name.lower(),
@@ -198,13 +272,12 @@ async def categories():
     return categories_list
 
 @app.get("/memory/neural-graph")
-async def neural_graph():
+async def neural_graph(user: UserInDB = Depends(current_user)):
     """Genera red neuronal HORIZONTAL con comentarios como capas adicionales"""
     import random
-    from dynamic_learning import memory_threads
-    
-    # Obtener categorías aprendidas del sistema dinámico
-    learned_data = get_category_summary()
+    with user_learning_storage(user.user_id) as user_session:
+        learned_data = get_category_summary()
+        memory_threads = user_session["memory_threads"]
     
     nodes = []
     links = []
@@ -358,17 +431,19 @@ async def neural_graph():
     return {"nodes": nodes, "links": links, "stats": stats}
 
 @app.get("/memory/learned-categories")
-async def get_learned_categories():
+async def get_learned_categories(user: UserInDB = Depends(current_user)):
     """Retorna las categorías y subcategorías que el sistema ha aprendido automáticamente"""
-    summary = get_category_summary()
+    with user_learning_storage(user.user_id):
+        summary = get_category_summary()
     return summary
 
 @app.get("/memory/memories")
-async def get_memories(limit: int = 50, category: Optional[str] = None):
+async def get_memories(limit: int = 50, category: Optional[str] = None, user: UserInDB = Depends(current_user)):
     """Obtiene las memorias recientes"""
     from datetime import datetime
     
-    filtered = conversations
+    user_conversations = get_user_session(user.user_id)["conversations"]
+    filtered = user_conversations
     if category:
         filtered = [c for c in conversations if c.get("category") == category]
     
@@ -394,12 +469,13 @@ class CommentInput(BaseModel):
     user: Optional[str] = "Usuario"
 
 @app.post("/memory/comment")
-async def add_memory_comment(input: CommentInput):
+async def add_memory_comment(input: CommentInput, user: UserInDB = Depends(current_user)):
     """Agrega un comentario a una memoria existente"""
     from dynamic_learning import add_comment_to_memory
     
     try:
-        comment_obj = add_comment_to_memory(input.memory_id, input.comment, input.user)
+        with user_learning_storage(user.user_id):
+            comment_obj = add_comment_to_memory(input.memory_id, input.comment, input.user)
         return {
             "success": True,
             "comment": comment_obj,
@@ -412,11 +488,12 @@ async def add_memory_comment(input: CommentInput):
         }
 
 @app.get("/memory/thread/{memory_id}")
-async def get_memory_thread(memory_id: str):
+async def get_memory_thread(memory_id: str, user: UserInDB = Depends(current_user)):
     """Obtiene el hilo completo de comentarios de una memoria"""
     from dynamic_learning import get_memory_thread
     
-    thread = get_memory_thread(memory_id)
+    with user_learning_storage(user.user_id):
+        thread = get_memory_thread(memory_id)
     return {
         "memory_id": memory_id,
         "comments": thread,
@@ -426,57 +503,65 @@ async def get_memory_thread(memory_id: str):
 # ===== GESTIÓN DE MEMORIAS =====
 
 @app.delete("/memory/{memory_id}")
-async def delete_memory_endpoint(memory_id: str):
+async def delete_memory_endpoint(memory_id: str, user: UserInDB = Depends(current_user)):
     """Elimina una memoria"""
-    result = delete_memory(memory_id)
+    with user_learning_storage(user.user_id):
+        result = delete_memory(memory_id)
     return result
 
 @app.put("/memory/{memory_id}/importance")
-async def update_importance(memory_id: str, important: bool):
+async def update_importance(memory_id: str, important: bool, user: UserInDB = Depends(current_user)):
     """Marca o desmarca una memoria como importante"""
-    result = update_memory_importance(memory_id, important)
+    with user_learning_storage(user.user_id):
+        result = update_memory_importance(memory_id, important)
     return result
 
 @app.put("/memory/{memory_id}/reminder")
-async def set_reminder(memory_id: str, reminder_date: str, reminder_message: str = None):
+async def set_reminder(memory_id: str, reminder_date: str, reminder_message: str = None, user: UserInDB = Depends(current_user)):
     """Establece un recordatorio para una memoria"""
-    result = set_memory_reminder(memory_id, reminder_date, reminder_message)
+    with user_learning_storage(user.user_id):
+        result = set_memory_reminder(memory_id, reminder_date, reminder_message)
     return result
 
 @app.get("/memory/reminders")
-async def get_pending_reminders():
+async def get_pending_reminders(user: UserInDB = Depends(current_user)):
     """Obtiene todos los recordatorios pendientes"""
-    reminders = get_reminders()
+    with user_learning_storage(user.user_id):
+        reminders = get_reminders()
     return {
         "reminders": reminders,
         "count": len(reminders)
     }
 
 @app.put("/memory/{memory_id}/expiration")
-async def set_expiration(memory_id: str, expires_at: str):
+async def set_expiration(memory_id: str, expires_at: str, user: UserInDB = Depends(current_user)):
     """Establece fecha de caducidad para una memoria"""
-    result = set_memory_expiration(memory_id, expires_at)
+    with user_learning_storage(user.user_id):
+        result = set_memory_expiration(memory_id, expires_at)
     return result
 
 @app.get("/memory/expired")
-async def get_expired():
+async def get_expired(user: UserInDB = Depends(current_user)):
     """Obtiene memorias caducadas"""
-    expired = get_expired_memories()
+    with user_learning_storage(user.user_id):
+        expired = get_expired_memories()
     return {
         "expired": expired,
         "count": len(expired)
     }
 
 @app.post("/memory/cleanup")
-async def cleanup_expired():
+async def cleanup_expired(user: UserInDB = Depends(current_user)):
     """Archiva memorias caducadas"""
-    result = cleanup_expired_memories()
+    with user_learning_storage(user.user_id):
+        result = cleanup_expired_memories()
     return result
 
 @app.get("/memory/{memory_id}")
-async def get_memory(memory_id: str):
+async def get_memory(memory_id: str, user: UserInDB = Depends(current_user)):
     """Obtiene una memoria específica por ID"""
-    memory = get_memory_by_id(memory_id)
+    with user_learning_storage(user.user_id):
+        memory = get_memory_by_id(memory_id)
     if not memory:
         return {"error": "Memoria no encontrada"}
     return memory
