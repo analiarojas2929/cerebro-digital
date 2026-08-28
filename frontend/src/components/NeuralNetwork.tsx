@@ -16,6 +16,7 @@ interface Node {
   time?: string;
   category?: string;
   subcategory?: string;
+  type?: string;
 }
 
 interface Link {
