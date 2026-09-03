@@ -22,6 +22,7 @@ export interface MessageInput {
 export interface MessageResponse {
   response: string;
   session_id: string;
+  memory_saved?: boolean;
   category?: string;
   sentiment?: string;
   related_memories: RelatedMemory[];

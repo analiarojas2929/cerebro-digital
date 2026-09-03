@@ -177,6 +177,37 @@ def extract_entities(text: str):
     return entities
 
 
+def should_store_memory(message: str, entities: dict) -> bool:
+    """Solo guarda contenido personal, relevante o marcado explícitamente como recuerdo."""
+    text = message.strip().lower()
+    if len(text) < 12:
+        return False
+
+    transient_phrases = {
+        'hola', 'buenos días', 'buenas tardes', 'buenas noches',
+        'gracias', 'ok', 'vale', 'sí', 'no', 'qué tal', 'cómo estás',
+    }
+    if text.rstrip('!?.,') in transient_phrases:
+        return False
+
+    explicit_memory = (
+        'recuerda', 'memoriza', 'guarda esto', 'no olvides',
+        'quiero conservar', 'esto es importante', 'mi historia',
+    )
+    if any(phrase in text for phrase in explicit_memory):
+        return True
+
+    if any(entities.get(key) for key in ('personas', 'lugares', 'eventos', 'temas')):
+        return True
+
+    personal_markers = (
+        'mi ', 'mis ', 'me gusta', 'me encanta', 'prefiero',
+        'nací', 'viví', 'vivo en', 'trabajo en', 'aprendí',
+        'hoy ', 'ayer ', 'mañana ', 'siento ', 'estoy ',
+    )
+    return len(text) >= 28 and any(marker in text for marker in personal_markers)
+
+
 def update_categories(message: str):
     """Actualiza el sistema de categorías dinámicas con la nueva información"""
     from datetime import datetime
@@ -195,6 +226,9 @@ def update_categories(message: str):
     
     # Extraer entidades del mensaje
     entities = extract_entities(message)
+
+    if not should_store_memory(message, entities):
+        return entities
     
     # Crear objeto de memoria con timestamp e ID único
     timestamp = datetime.now()

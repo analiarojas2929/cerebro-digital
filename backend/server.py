@@ -28,6 +28,7 @@ from dynamic_learning import (
     get_reminders, set_memory_expiration, get_expired_memories,
     cleanup_expired_memories, get_memory_by_id
 )
+from dynamic_learning import should_store_memory
 
 # Importar conversación con IA
 try:
@@ -101,6 +102,7 @@ class MessageResponse(BaseModel):
     category: str = "general"
     confidence: float = 0.5
     related_memories: List = []
+    memory_saved: bool = False
 
 # Storage
 conversations = []
@@ -158,6 +160,7 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
     # APRENDIZAJE DINÁMICO - Extraer y almacenar categorías automáticamente
     with user_learning_storage(user.user_id) as user_session:
         entities_found = update_categories(msg.message)
+        memory_saved = should_store_memory(msg.message, entities_found)
     
     # Clasificación simple
     if 'trabajo' in text or 'proyecto' in text:
@@ -210,7 +213,7 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
         except Exception as e:
             print(f"❌ Error con IA: {e}")
             # Fallback a respuesta básica
-            resp = "¡Entendido! He guardado esta información."
+            resp = "¡Entendido! He procesado tu mensaje."
     
     # ==== RESPUESTA BÁSICA (sin IA) ====
     else:
@@ -231,7 +234,7 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
             elif 'cómo estás' in text:
                 resp = f"¡Funcionando perfectamente! Tu mensaje es sobre '{cat}'"
             else:
-                resp = f"Mensaje guardado como '{cat}'"
+                resp = "Mensaje procesado. Lo guardaré como memoria cuando contenga información importante."
     
     # Guardar en historial
     user_session["conversations"].append({
@@ -246,7 +249,8 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
         response=resp,
         session_id=sid,
         category=cat,
-        confidence=conf
+        confidence=conf,
+        memory_saved=memory_saved,
     )
 
 @app.get("/memory/stats")
@@ -259,7 +263,7 @@ async def stats(user: UserInDB = Depends(current_user)):
     
     return {
         "total_conversations": len(user_session["conversations"]),
-        "total_memories": len(user_session["conversations"]),
+        "total_memories": len(user_session["memory_index"]),
         "categories": [{"name": k, "count": v} for k, v in cats.items()]
     }
 
