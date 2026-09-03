@@ -103,6 +103,8 @@ class MessageResponse(BaseModel):
     confidence: float = 0.5
     related_memories: List = []
     memory_saved: bool = False
+    memory_importance: int = 0  # Nuevo: 0-100
+    memory_decision: str = "TRIVIAL"  # Nuevo: MEMORY, TEMPORARY, TRIVIAL, DUPLICATE, UPDATE
 
 # Storage
 conversations = []
@@ -159,8 +161,14 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
     
     # APRENDIZAJE DINÁMICO - Extraer y almacenar categorías automáticamente
     with user_learning_storage(user.user_id) as user_session:
-        entities_found = update_categories(msg.message)
-        memory_saved = should_store_memory(msg.message, entities_found)
+        # Evaluar el mensaje con el sistema inteligente
+        memory_evaluation = dynamic_learning.evaluate_message(msg.message)
+        
+        # Actualizar categorías (solo si decision == CREATE)
+        update_result = update_categories(msg.message)
+        
+        # Obtener entidades del mensaje
+        entities_found = dynamic_learning.extract_entities(msg.message)
     
     # Clasificación simple
     if 'trabajo' in text or 'proyecto' in text:
@@ -250,7 +258,9 @@ async def send_message(msg: MessageInput, user: UserInDB = Depends(current_user)
         session_id=sid,
         category=cat,
         confidence=conf,
-        memory_saved=memory_saved,
+        memory_saved=(memory_evaluation['action'] == 'CREATE'),
+        memory_importance=memory_evaluation['importance'],
+        memory_decision=memory_evaluation['decision'],
     )
 
 @app.get("/memory/stats")

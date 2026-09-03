@@ -1,8 +1,28 @@
 """
-Sistema de Aprendizaje Dinámico de Categorías
-Extrae automáticamente personas, lugares, eventos y temas de las conversaciones
+Sistema de Aprendizaje Dinámico con Evaluación Inteligente de Memorias
+- Extrae automáticamente personas, lugares, eventos y temas
+- Califica importancia de 0-100
+- Clasifica como MEMORY, TEMPORARY, TRIVIAL, DUPLICATE, UPDATE
+- Retorna respuesta estructurada para cada mensaje
 """
 import uuid
+from enum import Enum
+from datetime import datetime
+from typing import Dict, List, Optional
+
+# Tipos de decisión de memoria
+class MemoryDecision(str, Enum):
+    MEMORY = "MEMORY"
+    TEMPORARY = "TEMPORARY"
+    TRIVIAL = "TRIVIAL"
+    DUPLICATE = "DUPLICATE"
+    UPDATE = "UPDATE"
+
+# Acciones recomendadas
+class MemoryAction(str, Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    IGNORE = "IGNORE"
 
 # Almacenamiento de categorías dinámicas
 dynamic_categories = {}
@@ -12,6 +32,9 @@ memory_threads = {}  # ID de memoria → lista de comentarios
 
 # Índice de memorias por ID para acceso rápido
 memory_index = {}  # ID → {category, subcategory, memory_obj}
+
+# Memorias temporales (sesión actual)
+short_term_memory = {}  # ID → {content, expires: 'session_end'}
 
 def add_comment_to_memory(memory_id: str, comment: str, user: str = "Usuario"):
     """Agrega un comentario a una memoria existente"""
@@ -177,41 +200,290 @@ def extract_entities(text: str):
     return entities
 
 
-def should_store_memory(message: str, entities: dict) -> bool:
-    """Solo guarda contenido personal, relevante o marcado explícitamente como recuerdo."""
+def calculate_memory_score(message: str, entities: dict) -> int:
+    """
+    Calcula un score de importancia de 0-100 para un mensaje.
+    Retorna importancia basada en múltiples criterios.
+    """
+    score = 0
     text = message.strip().lower()
-    if len(text) < 12:
-        return False
-
-    transient_phrases = {
-        'hola', 'buenos días', 'buenas tardes', 'buenas noches',
-        'gracias', 'ok', 'vale', 'sí', 'no', 'qué tal', 'cómo estás',
+    
+    # Criterio 1: Longitud (hasta 15 puntos)
+    # Mensajes muy cortos son generalmente triviales
+    if len(text) >= 50:
+        score += 15
+    elif len(text) >= 30:
+        score += 10
+    elif len(text) >= 20:
+        score += 5
+    
+    # Criterio 2: Solicitud explícita de recordar (50 puntos) - MÁS PESO
+    explicit_memory_keywords = [
+        'recuerda', 'memoriza', 'guarda esto', 'guárdalo', 'acuérdate',
+        'no olvides', 'quiero conservar', 'esto es importante',
+        'mi historia', 'quiero que lo recuerdes', 'graba esto',
+    ]
+    for keyword in explicit_memory_keywords:
+        if keyword in text:
+            return 75  # Si hay solicitud explícita, retornar directamente alto
+    
+    # Criterio 3: Entidades detectadas (hasta 25 puntos) - MÁS PESO
+    entity_count = sum(len(entities.get(key, [])) for key in ('personas', 'lugares', 'eventos', 'temas'))
+    if entity_count > 0:
+        score += min(entity_count * 8, 25)
+    
+    # Criterio 4: Marcadores personales (hasta 35 puntos) - MÁS PESO
+    personal_markers = {
+        'mi ': 10, 'mis ': 10, 'me gusta': 14, 'me encanta': 14,
+        'prefiero': 14, 'nací': 22, 'viví': 18, 'vivo en': 18,
+        'trabajo en': 20, 'trabajo como': 20, 'aprendí': 18, 'estudio': 18,
+        'proyecto': 25, 'meta': 18, 'objetivo': 18, 'startup': 22,
+        'decisión': 20, 'experiencia': 18, 'recuerdo': 18,
     }
-    if text.rstrip('!?.,') in transient_phrases:
-        return False
+    for marker, points in personal_markers.items():
+        if marker in text:
+            score += points
+    
+    # Criterio 5: Palabras de contexto importante (hasta 30 puntos)
+    important_keywords = {
+        'familia': 20, 'hermano': 20, 'padre': 20, 'madre': 20,
+        'amigo': 15, 'relación': 18, 'amor': 20, 'trabajo': 15,
+        'carrera': 18, 'salud': 20, 'enfermedad': 20, 'muerte': 25,
+        'logro': 20, 'éxito': 18, 'error': 12, 'aprendizaje': 18,
+    }
+    for keyword, points in important_keywords.items():
+        if keyword in text:
+            score += points
+    
+    # Criterio 6: Detectar contenido temporal (penalizar moderadamente)
+    temporal_markers = {
+        'ahora estoy': -5, 'estoy probando': -8, 'en este momento': -5,
+        'hoy quiero': -3, 'solo para': -8, 'temporal': -15,
+        'por ahora': -5, 'está siendo': -3,
+    }
+    for marker, points in temporal_markers.items():
+        if marker in text:
+            score += points
+    
+    # Criterio 7: Detectar trivialidad (penalizar fuertemente)
+    trivial_phrases = {
+        'hola': -50, 'buenos días': -50, 'buenas tardes': -50,
+        'gracias': -40, 'ok': -50, 'vale': -50, 'sí': -50, 'no': -50,
+        'jaja': -40, 'lol': -40, 'xd': -40, 'qué tal': -50,
+        'cómo estás': -50, 'bien y tú': -40, 'muy bien': -30,
+    }
+    for phrase, points in trivial_phrases.items():
+        text_stripped = text.rstrip('!?.,')
+        if text_stripped == phrase or (len(text.split()) <= 2 and phrase in text):
+            score += points
+    
+    # Normalizar score entre 0 y 100
+    return max(0, min(100, score))
 
-    explicit_memory = (
-        'recuerda', 'memoriza', 'guarda esto', 'no olvides',
-        'quiero conservar', 'esto es importante', 'mi historia',
-    )
-    if any(phrase in text for phrase in explicit_memory):
-        return True
 
-    if any(entities.get(key) for key in ('personas', 'lugares', 'eventos', 'temas')):
-        return True
+def classify_memory_decision(
+    message: str,
+    entities: dict,
+    importance_score: int
+) -> Dict:
+    """
+    Clasifica el mensaje en una categoría de decisión.
+    Retorna: {decision, reason, action}
+    """
+    text = message.strip().lower()
+    
+    # 1. Detectar si es información trivial (score < 25)
+    if importance_score < 25:
+        return {
+            'decision': MemoryDecision.TRIVIAL,
+            'reason': 'Información casual o de baja relevancia para futuro.',
+            'action': MemoryAction.IGNORE
+        }
+    
+    # 2. Detectar si es información temporal (25-59)
+    temporal_indicators = [
+        'ahora estoy', 'en este momento', 'hoy quiero',
+        'estoy probando', 'solo para esta tarea', 'por ahora',
+        'está siendo', 'temporal', 'solamente esta vez'
+    ]
+    if any(indicator in text for indicator in temporal_indicators) and importance_score < 60:
+        return {
+            'decision': MemoryDecision.TEMPORARY,
+            'reason': 'Información útil solo durante la conversación actual.',
+            'action': MemoryAction.IGNORE
+        }
+    
+    # 3. Detectar duplicados (información que ya existe en memoria)
+    duplicate_check = find_duplicate_memory(message, entities)
+    if duplicate_check['is_duplicate']:
+        return {
+            'decision': MemoryDecision.DUPLICATE,
+            'reason': f"Información similar ya existe: {duplicate_check['similar_memory_id']}",
+            'action': MemoryAction.IGNORE,
+            'similar_memory_id': duplicate_check['similar_memory_id']
+        }
+    
+    # 4. Detectar actualizaciones (modifica una memoria existente)
+    update_check = find_memory_to_update(message, entities)
+    if update_check['should_update']:
+        return {
+            'decision': MemoryDecision.UPDATE,
+            'reason': 'Nueva información modifica o complementa una memoria existente.',
+            'action': MemoryAction.UPDATE,
+            'target_memory_id': update_check['target_memory_id'],
+            'updated_content': update_check['updated_content']
+        }
+    
+    # 5. Guardar como memoria permanente (score >= 60)
+    if importance_score >= 60:
+        return {
+            'decision': MemoryDecision.MEMORY,
+            'reason': f'Información importante/estable con score {importance_score}/100.',
+            'action': MemoryAction.CREATE
+        }
+    
+    # 6. Información temporal con valor moderado (25-59)
+    if 25 <= importance_score < 60:
+        return {
+            'decision': MemoryDecision.TEMPORARY,
+            'reason': f'Información potencialmente útil pero de naturaleza temporal (score {importance_score}).',
+            'action': MemoryAction.IGNORE  # Guardar en short_term_memory, no permanentemente
+        }
+    
+    # Por defecto: trivial
+    return {
+        'decision': MemoryDecision.TRIVIAL,
+        'reason': f'Score insuficiente ({importance_score}/100).',
+        'action': MemoryAction.IGNORE
+    }
 
-    personal_markers = (
-        'mi ', 'mis ', 'me gusta', 'me encanta', 'prefiero',
-        'nací', 'viví', 'vivo en', 'trabajo en', 'aprendí',
-        'hoy ', 'ayer ', 'mañana ', 'siento ', 'estoy ',
-    )
-    return len(text) >= 28 and any(marker in text for marker in personal_markers)
+
+def find_duplicate_memory(message: str, entities: dict) -> Dict:
+    """
+    Busca si existe una memoria similar (información ya guardada).
+    Retorna: {is_duplicate: bool, similar_memory_id: str}
+    """
+    global memory_index
+    
+    text = message.strip().lower()
+    text_words = set(text.split())
+    
+    # Buscar memorias similares
+    for memory_id, mem_data in memory_index.items():
+        existing_text = mem_data['memory']['text'].lower()
+        existing_words = set(existing_text.split())
+        
+        # Calcular similitud (Jaccard)
+        if len(text_words) > 0 and len(existing_words) > 0:
+            similarity = len(text_words & existing_words) / len(text_words | existing_words)
+            if similarity > 0.6:  # Más del 60% similar
+                return {
+                    'is_duplicate': True,
+                    'similar_memory_id': memory_id
+                }
+    
+    return {
+        'is_duplicate': False,
+        'similar_memory_id': None
+    }
+
+
+def find_memory_to_update(message: str, entities: dict) -> Dict:
+    """
+    Detecta si la nueva información debería actualizar una memoria existente.
+    Retorna: {should_update: bool, target_memory_id: str, updated_content: str}
+    """
+    global memory_index
+    
+    text = message.strip().lower()
+    
+    # Palabras que indican actualización ("ahora también", "además", "pero")
+    update_indicators = [
+        'ahora también', 'además', 'pero ahora', 'también estoy',
+        'luego', 'después', 'cambié a', 'pasé a', 'actualicé',
+        'ya no', 'cambié de opinión', 'modificó', 'mejoró'
+    ]
+    
+    has_update_indicator = any(indicator in text for indicator in update_indicators)
+    
+    if has_update_indicator:
+        # Buscar memoria relacionada
+        for memory_id, mem_data in memory_index.items():
+            existing_text = mem_data['memory']['text'].lower()
+            
+            # Si hay palabras clave similares, es candidata a actualización
+            existing_keywords = set(existing_text.split()[:10])  # Primeras 10 palabras
+            new_keywords = set(text.split()[:10])
+            
+            common = existing_keywords & new_keywords
+            if len(common) >= 2:  # Al menos 2 palabras en común
+                return {
+                    'should_update': True,
+                    'target_memory_id': memory_id,
+                    'updated_content': f"{mem_data['memory']['text']} Actualización: {message}"
+                }
+    
+    return {
+        'should_update': False,
+        'target_memory_id': None,
+        'updated_content': None
+    }
+
+
+def evaluate_message(message: str) -> Dict:
+    """
+    FUNCIÓN PRINCIPAL: Evalúa un mensaje y retorna decisión de memoria estructurada.
+    
+    Retorna:
+    {
+        'decision': 'MEMORY' | 'TEMPORARY' | 'TRIVIAL' | 'DUPLICATE' | 'UPDATE',
+        'importance': 0-100,
+        'reason': str,
+        'memory': str (contenido si se guarda) | null,
+        'action': 'CREATE' | 'UPDATE' | 'IGNORE',
+        'similar_memory_id': str (si es DUPLICATE),
+        'target_memory_id': str (si es UPDATE),
+    }
+    """
+    entities = extract_entities(message)
+    importance_score = calculate_memory_score(message, entities)
+    classification = classify_memory_decision(message, entities, importance_score)
+    
+    result = {
+        'decision': classification['decision'].value,
+        'importance': importance_score,
+        'reason': classification['reason'],
+        'memory': message if classification['action'].value == 'CREATE' else None,
+        'action': classification['action'].value,
+        'entities': entities,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # Agregar campos específicos según el tipo
+    if 'similar_memory_id' in classification:
+        result['similar_memory_id'] = classification['similar_memory_id']
+    if 'target_memory_id' in classification:
+        result['target_memory_id'] = classification['target_memory_id']
+        result['updated_content'] = classification.get('updated_content')
+    
+    return result
+
+
+def should_store_memory(message: str, entities: dict = None) -> bool:
+    """Wrapper de compatibilidad: retorna bool en lugar de diccionario."""
+    if entities is None:
+        entities = extract_entities(message)
+    
+    evaluation = evaluate_message(message)
+    return evaluation['action'] == 'CREATE'
 
 
 def update_categories(message: str):
-    """Actualiza el sistema de categorías dinámicas con la nueva información"""
-    from datetime import datetime
-    global dynamic_categories
+    """
+    Actualiza el sistema de categorías dinámicas con nueva información.
+    Usa la evaluación inteligente: solo guarda si importancia >= 70 y action == CREATE.
+    """
+    global dynamic_categories, memory_index
     
     # Inicializar categorías principales si no existen
     if not dynamic_categories:
@@ -224,11 +496,61 @@ def update_categories(message: str):
             'Emociones': {'icon': '💭', 'color': '#8b5cf6', 'subcategories': {}, 'count': 0}
         }
     
-    # Extraer entidades del mensaje
-    entities = extract_entities(message)
-
-    if not should_store_memory(message, entities):
-        return entities
+    # Evaluar mensaje con sistema inteligente
+    evaluation = evaluate_message(message)
+    
+    # Solo procesar si se debe crear memoria (action == CREATE)
+    if evaluation['action'] != 'CREATE':
+        # Si es TEMPORARY, guardar en short_term_memory
+        if evaluation['decision'] == MemoryDecision.TEMPORARY.value:
+            temp_id = str(uuid.uuid4())
+            short_term_memory[temp_id] = {
+                'id': temp_id,
+                'content': message,
+                'importance': evaluation['importance'],
+                'expires': 'session_end',
+                'timestamp': evaluation['timestamp']
+            }
+        return evaluation
+    
+    entities = evaluation['entities']
+    
+def update_categories(message: str):
+    """
+    Actualiza el sistema de categorías dinámicas con nueva información.
+    Usa la evaluación inteligente: solo guarda si importancia >= 70 y action == CREATE.
+    """
+    global dynamic_categories, memory_index
+    
+    # Inicializar categorías principales si no existen
+    if not dynamic_categories:
+        dynamic_categories = {
+            'Personal': {'icon': '👤', 'color': '#3b82f6', 'subcategories': {}, 'count': 0},
+            'Trabajo': {'icon': '💼', 'color': '#ef4444', 'subcategories': {}, 'count': 0},
+            'Familia': {'icon': '👨‍👩‍👧‍👦', 'color': '#ec4899', 'subcategories': {}, 'count': 0},
+            'Lugares': {'icon': '🏠', 'color': '#10b981', 'subcategories': {}, 'count': 0},
+            'Eventos': {'icon': '🎂', 'color': '#f59e0b', 'subcategories': {}, 'count': 0},
+            'Emociones': {'icon': '💭', 'color': '#8b5cf6', 'subcategories': {}, 'count': 0}
+        }
+    
+    # Evaluar mensaje con sistema inteligente
+    evaluation = evaluate_message(message)
+    
+    # Solo procesar si se debe crear memoria (action == CREATE)
+    if evaluation['action'] != 'CREATE':
+        # Si es TEMPORARY, guardar en short_term_memory
+        if evaluation['decision'] == MemoryDecision.TEMPORARY.value:
+            temp_id = str(uuid.uuid4())
+            short_term_memory[temp_id] = {
+                'id': temp_id,
+                'content': message,
+                'importance': evaluation['importance'],
+                'expires': 'session_end',
+                'timestamp': evaluation['timestamp']
+            }
+        return evaluation
+    
+    entities = evaluation['entities']
     
     # Crear objeto de memoria con timestamp e ID único
     timestamp = datetime.now()
@@ -240,10 +562,11 @@ def update_categories(message: str):
         'timestamp': timestamp.isoformat(),
         'date': timestamp.strftime('%d/%m/%Y'),
         'time': timestamp.strftime('%H:%M:%S'),
-        'important': False,  # Nuevo: marcar como importante
-        'expires_at': None,  # Nuevo: fecha de caducidad (opcional)
-        'reminder': None,    # Nuevo: recordatorio (fecha + mensaje)
-        'archived': False    # Nuevo: archivada pero no eliminada
+        'importance': evaluation['importance'],  # Guardar score
+        'important': evaluation['importance'] >= 80,  # Marcar si es muy importante
+        'expires_at': None,
+        'reminder': None,
+        'archived': False
     }
     
     # Variable para rastrear si se clasificó en alguna categoría
@@ -257,7 +580,6 @@ def update_categories(message: str):
     
     if any(kw in text_lower for kw in trabajo_keywords):
         subcategoria = 'General'
-        # Intentar detectar subcategoría más específica
         if 'reunión' in text_lower or 'junta' in text_lower:
             subcategoria = 'Reuniones'
         elif 'proyecto' in text_lower:
@@ -267,40 +589,26 @@ def update_categories(message: str):
         
         if subcategoria not in dynamic_categories['Trabajo']['subcategories']:
             dynamic_categories['Trabajo']['subcategories'][subcategoria] = {
-                'icon': '📋',
-                'memories': [],
-                'count': 0
+                'icon': '📋', 'memories': [], 'count': 0
             }
         dynamic_categories['Trabajo']['subcategories'][subcategoria]['memories'].append(memory_obj)
         dynamic_categories['Trabajo']['subcategories'][subcategoria]['count'] += 1
         dynamic_categories['Trabajo']['count'] += 1
-        memory_index[memory_id] = {
-            'category': 'Trabajo',
-            'subcategory': subcategoria,
-            'memory': memory_obj
-        }
+        memory_index[memory_id] = {'category': 'Trabajo', 'subcategory': subcategoria, 'memory': memory_obj}
         classified = True
     
-    # Actualizar subcategorías de Familia (personas)
+    # Actualizar Familia (personas)
     if entities['personas']:
         for persona in entities['personas']:
             nombre = persona['name']
             if nombre not in dynamic_categories['Familia']['subcategories']:
                 dynamic_categories['Familia']['subcategories'][nombre] = {
-                    'icon': persona['icon'],
-                    'memories': [],
-                    'count': 0
+                    'icon': persona['icon'], 'memories': [], 'count': 0
                 }
             dynamic_categories['Familia']['subcategories'][nombre]['memories'].append(memory_obj)
             dynamic_categories['Familia']['subcategories'][nombre]['count'] += 1
             dynamic_categories['Familia']['count'] += 1
-            
-            # Actualizar índice
-            memory_index[memory_id] = {
-                'category': 'Familia',
-                'subcategory': nombre,
-                'memory': memory_obj
-            }
+            memory_index[memory_id] = {'category': 'Familia', 'subcategory': nombre, 'memory': memory_obj}
             classified = True
     
     # Actualizar Lugares
@@ -309,19 +617,12 @@ def update_categories(message: str):
             nombre = lugar['name']
             if nombre not in dynamic_categories['Lugares']['subcategories']:
                 dynamic_categories['Lugares']['subcategories'][nombre] = {
-                    'icon': lugar['icon'],
-                    'memories': [],
-                    'count': 0
+                    'icon': lugar['icon'], 'memories': [], 'count': 0
                 }
             dynamic_categories['Lugares']['subcategories'][nombre]['memories'].append(memory_obj)
             dynamic_categories['Lugares']['subcategories'][nombre]['count'] += 1
             dynamic_categories['Lugares']['count'] += 1
-            
-            memory_index[memory_id] = {
-                'category': 'Lugares',
-                'subcategory': nombre,
-                'memory': memory_obj
-            }
+            memory_index[memory_id] = {'category': 'Lugares', 'subcategory': nombre, 'memory': memory_obj}
             classified = True
     
     # Actualizar Eventos
@@ -330,19 +631,12 @@ def update_categories(message: str):
             nombre = evento['name']
             if nombre not in dynamic_categories['Eventos']['subcategories']:
                 dynamic_categories['Eventos']['subcategories'][nombre] = {
-                    'icon': evento['icon'],
-                    'memories': [],
-                    'count': 0
+                    'icon': evento['icon'], 'memories': [], 'count': 0
                 }
             dynamic_categories['Eventos']['subcategories'][nombre]['memories'].append(memory_obj)
             dynamic_categories['Eventos']['subcategories'][nombre]['count'] += 1
             dynamic_categories['Eventos']['count'] += 1
-            
-            memory_index[memory_id] = {
-                'category': 'Eventos',
-                'subcategory': nombre,
-                'memory': memory_obj
-            }
+            memory_index[memory_id] = {'category': 'Eventos', 'subcategory': nombre, 'memory': memory_obj}
             classified = True
     
     # Actualizar Emociones/Temas
@@ -351,19 +645,12 @@ def update_categories(message: str):
             nombre = tema['name']
             if nombre not in dynamic_categories['Emociones']['subcategories']:
                 dynamic_categories['Emociones']['subcategories'][nombre] = {
-                    'icon': tema['icon'],
-                    'memories': [],
-                    'count': 0
+                    'icon': tema['icon'], 'memories': [], 'count': 0
                 }
             dynamic_categories['Emociones']['subcategories'][nombre]['memories'].append(memory_obj)
             dynamic_categories['Emociones']['subcategories'][nombre]['count'] += 1
             dynamic_categories['Emociones']['count'] += 1
-            
-            memory_index[memory_id] = {
-                'category': 'Emociones',
-                'subcategory': nombre,
-                'memory': memory_obj
-            }
+            memory_index[memory_id] = {'category': 'Emociones', 'subcategory': nombre, 'memory': memory_obj}
             classified = True
     
     # Si no se clasificó en ninguna categoría específica, agregar a Personal/General
@@ -371,20 +658,14 @@ def update_categories(message: str):
         subcategoria = 'Notas Generales'
         if subcategoria not in dynamic_categories['Personal']['subcategories']:
             dynamic_categories['Personal']['subcategories'][subcategoria] = {
-                'icon': '📝',
-                'memories': [],
-                'count': 0
+                'icon': '📝', 'memories': [], 'count': 0
             }
         dynamic_categories['Personal']['subcategories'][subcategoria]['memories'].append(memory_obj)
         dynamic_categories['Personal']['subcategories'][subcategoria]['count'] += 1
         dynamic_categories['Personal']['count'] += 1
-        memory_index[memory_id] = {
-            'category': 'Personal',
-            'subcategory': subcategoria,
-            'memory': memory_obj
-        }
+        memory_index[memory_id] = {'category': 'Personal', 'subcategory': subcategoria, 'memory': memory_obj}
     
-    return entities
+    return evaluation
 
 
 def get_category_summary():
